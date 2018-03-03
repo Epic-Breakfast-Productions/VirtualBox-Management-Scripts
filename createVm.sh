@@ -27,6 +27,20 @@ nicAdapter="$errVal";
 # The ISO to mount to the dvd drive.
 iso="$errVal";
 
+function showVmDetails(){
+	echo;
+	echo;
+	echo "VM Info: (all sizes are in Megabytes)";
+	echo "  Name:                 \"$vmName\"";
+	echo "  Memory:               $memCount";
+	echo "  Harddrive Size:       $hdSize";
+	echo "  NIC Mode / interface: $nicMode / $nicAdapter";
+	echo;
+	echo "  VM Location:          $virtualBoxMachineFolder";
+	echo "  ISO Location:         $iso";
+	echo;
+	echo;
+}
 
 function showHelp(){
 	echo "Help output:";
@@ -96,19 +110,7 @@ while getopts "n:m:d:N:a:i:f:" opt; do
 done
 
 echo "Vbox machine folder: $virtualBoxMachineFolder";
-
-echo "All sizes are in Megabytes.";
-echo;
-echo "VM Info:";
-echo "	Name:                 \"$vmName\"";
-echo "	Memory:               $memCount";
-echo "	Harddrive Size:       $hdSize";
-echo "	NIC Mode / interface: $nicMode / $nicAdapter";
-echo;
-echo "	VM Location:          $virtualBoxMachineFolder";
-echo "	ISO Location:         $iso";
-echo;
-echo;
+showVmDetails;
 
 if [ ! -d "$virtualBoxMachineFolder"  ]; then
 	echo "INVALID VM folder given. Does it exist?";
@@ -129,6 +131,9 @@ if [ "$nicAdapter" == "$errVal" ]; then
 	echo "INVALID host networking adapter given. Can continue, but will not configure NIC.";
 fi
 
+# TODO: Check memory count
+#TODO: check disk size
+
 echo;
 read -p "Confirm settings and continue? [Yy] " -n 1 -r
 echo    # (optional) move to a new line
@@ -136,10 +141,63 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 	[[ "$0" = "$BASH_SOURCE" ]] && exit 1 || return 1 # handle exits from shell or function but don't exit interactive shell
 fi
 
+vmFolder="$virtualBoxMachineFolder$vmName";
+
+#############
+# create vm #
+#############
+VBoxManage createvm --name "$vmName" --register
 
 
+##############################
+# setup memory and dvd drive #
+##############################
+VBoxManage modifyvm "$vmName" --memory $memCount
+VBoxManage modifyvm "$vmName" --acpi on --boot1 dvd
 
 
-# VBoxManage createvm --name "$vmName" --register
+#TODO: if valid do this
+#############
+# setup nic #
+#############
+VBoxManage modifyvm --nic1 $nicMode --bridgeadapter1 $nicAdapter
 
+
+#######################
+# setup virtual drive #
+#######################
+smve="$vmFolder/$vmName.vdi";
+storageCtlName="IDE Controller";
+
+VBoxManage createhd --filename "$vmDrive" --size $hdSize
+VBoxManage storagectl "$vmName" --name "$storageCtlName" --add ide
+VBoxManage storageattach "$vmName" --storagectl "$storageCtlName" --port 0 --device 0 --type hdd --medium "$vmDrive"
+
+##########################
+# Setup ISO on dvd drive #
+##########################
+if [[ ! -e "$iso" || "$iso" == "$errVal" ]]; then
+	VBoxManage storageattach "$vmName" --storagectl "$storageCtlName" --port 1 --device 0 --type dvddrive --medium "$iso"
+else
+	echo;
+	echo "Run the following command to setup an ISO:";
+	echo "	VBoxManage storageattach \"$vmName\" --storagectl \"$storageCtlName\" --port 1 --device 0 --type dvddrive --medium \"<iso location>\"";
+	echo;
+fi
+
+########
+# Misc #
+########
+VBoxManage modifyvm "$vmName" --vrde on
+
+
+echo;
+echo;
+echo "Script completed.";
+showVmDetails;
+echo "Tips:";
+echo "	Use the following command to run the VM:";
+echo "		VBoxHeadless --startvm $vmName";
+echo;
+echo;
 

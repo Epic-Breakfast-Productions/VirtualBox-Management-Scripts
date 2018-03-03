@@ -1,0 +1,4 @@
+TODO list for this repo
+
+> remove vm from autostart script
+> remove vm alltogether
